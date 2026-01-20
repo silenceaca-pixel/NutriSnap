@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NutriSnap AI - Mobile Meal Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .modal-enter { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 pb-24">
+
+    <!-- Header -->
+    <header class="bg-white border-b sticky top-0 z-30 p-4">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="bg-emerald-500 p-2 rounded-xl text-white">
+                    <i data-lucide="utensils" class="w-5 h-5"></i>
+                </div>
+                <h1 class="font-extrabold text-xl tracking-tight">NutriSnap AI</h1>
+            </div>
+            <div id="user-badge" class="text-[10px] bg-slate-100 px-2 py-1 rounded-full text-slate-500 font-mono">
+                Connecting...
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto p-4 space-y-6">
+        <!-- Daily Summary Card -->
+        <section class="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 flex justify-between items-center">
+            <div>
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Calories</p>
+                <p class="text-3xl font-black text-slate-800"><span id="total-kcal">0</span> <span class="text-sm font-normal text-slate-400">kcal</span></p>
+            </div>
+            <div class="h-10 w-px bg-slate-100"></div>
+            <div>
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Protein</p>
+                <p class="text-3xl font-black text-slate-800"><span id="total-protein">0</span> <span class="text-sm font-normal text-slate-400">g</span></p>
+            </div>
+        </section>
+
+        <!-- Meal Log List -->
+        <section class="space-y-3">
+            <h2 class="font-bold text-slate-700 px-1">Today's Log</h2>
+            <div id="meal-list" class="space-y-3">
+                <!-- Meals injected here -->
+                <div class="text-center py-12 text-slate-400 italic">Loading your meals...</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Floating UI -->
+    <div class="fixed bottom-8 left-0 right-0 flex justify-center px-6 z-40">
+        <div class="bg-slate-900 rounded-full shadow-2xl p-2 flex gap-2 pointer-events-auto">
+            <button onclick="openModal()" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white py-3 px-6 rounded-full transition-all active:scale-95">
+                <i data-lucide="plus" class="w-5 h-5"></i>
+                <span class="font-bold">Log Meal</span>
+            </button>
+            <label class="flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 text-white w-12 h-12 rounded-full cursor-pointer transition-all active:scale-90">
+                <i data-lucide="camera" class="w-6 h-6"></i>
+                <input type="file" accept="image/*" class="hidden" onchange="handleImageAnalysis(this)">
+            </label>
+        </div>
+    </div>
+
+    <!-- Modal Area -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden modal-enter shadow-2xl">
+            <div id="modal-content" class="p-8">
+                <!-- Manual Form -->
+                <div id="form-view">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-black text-slate-800">New Meal</h2>
+                        <button onclick="closeModal()" class="text-slate-400"><i data-lucide="x"></i></button>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <input type="text" id="meal-name" placeholder="What did you eat?" class="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500">
+                        <div class="grid grid-cols-2 gap-4">
+                            <input type="number" id="meal-kcal" placeholder="Kcal" class="bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500">
+                            <input type="number" id="meal-prot" placeholder="Protein (g)" class="bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                        <button onclick="submitManual()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl mt-2 active:scale-95 transition-transform">Save Log</button>
+                    </div>
+                </div>
+
+                <!-- AI Loading View -->
+                <div id="loading-view" class="hidden py-10 text-center space-y-4">
+                    <div class="flex justify-center">
+                        <i data-lucide="refresh-cw" class="w-12 h-12 text-emerald-500 spinner"></i>
+                    </div>
+                    <p class="font-bold text-slate-800">AI Analysis in progress...</p>
+                    <p class="text-sm text-slate-500">Estimating portion sizes and macros</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-20 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-full shadow-lg hidden z-[60]"></div>
+
+    <!-- Firebase Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'nutrisnap-html';
+        
+        let currentUser = null;
+
+        // UI Initialization
+        lucide.createIcons();
+
+        // 1. Authentication
+        async function initAuth() {
+            try {
+                await signInAnonymously(auth);
+            } catch (err) {
+                showToast("Auth failed. Check connection.");
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('user-badge').innerText = `ID: ${user.uid.slice(0, 8)}`;
+                syncMeals();
+            }
+        });
+
+        // 2. Data Sync
+        function syncMeals() {
+            if (!currentUser) return;
+            const path = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'meals');
+            
+            onSnapshot(path, (snapshot) => {
+                const meals = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                // Sort by timestamp
+                meals.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                renderMeals(meals);
+            }, (err) => showToast("Sync Error"));
+        }
+
+        function renderMeals(meals) {
+            const list = document.getElementById('meal-list');
+            const kcalEl = document.getElementById('total-kcal');
+            const protEl = document.getElementById('total-protein');
+            
+            if (meals.length === 0) {
+                list.innerHTML = `<div class="text-center py-12 text-slate-400">No meals logged yet today.</div>`;
+                kcalEl.innerText = '0';
+                protEl.innerText = '0';
+                return;
+            }
+
+            let totalKcal = 0;
+            let totalProt = 0;
+            
+            list.innerHTML = meals.map(m => {
+                totalKcal += Number(m.calories || 0);
+                totalProt += Number(m.protein || 0);
+                return `
+                    <div class="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-slate-50 p-2 rounded-lg text-slate-400"><i data-lucide="utensils" class="w-4 h-4"></i></div>
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-sm">${m.name}</h3>
+                                <p class="text-xs text-slate-500">${m.calories} kcal • ${m.protein}g protein</p>
+                            </div>
+                        </div>
+                        <button onclick="window.deleteEntry('${m.id}')" class="text-slate-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
+                `;
+            }).join('');
+            
+            kcalEl.innerText = totalKcal;
+            protEl.innerText = totalProt;
+            lucide.createIcons();
+        }
+
+        // 3. AI Analysis
+        window.handleImageAnalysis = async (input) => {
+            const file = input.files[0];
+            if (!file) return;
+
+            openModal();
+            document.getElementById('form-view').classList.add('hidden');
+            document.getElementById('loading-view').classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                const base64 = reader.result.split(',')[1];
+                const apiKey = ""; // API Key injected at runtime
+                const prompt = "Analyze this food. Respond ONLY in JSON format: {\"name\": \"Food Name\", \"calories\": 0, \"protein\": 0}";
+
+                try {
+                    let response;
+                    // Exponential backoff retry logic
+                    for(let i=0; i<5; i++) {
+                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/png", data: base64 } }] }]
+                            })
+                        });
+                        if (response.ok) break;
+                        await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+                    }
+
+                    const result = await response.json();
+                    const text = result.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim();
+                    const data = JSON.parse(text);
+
+                    await window.saveMeal(data.name, data.calories, data.protein);
+                    closeModal();
+                } catch (e) {
+                    showToast("AI couldn't read that image.");
+                    document.getElementById('form-view').classList.remove('hidden');
+                    document.getElementById('loading-view').classList.add('hidden');
+                }
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // 4. Persistence Helpers
+        window.saveMeal = async (name, kcal, prot) => {
+            if (!currentUser) return;
+            try {
+                const path = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'meals');
+                await addDoc(path, {
+                    name,
+                    calories: Number(kcal),
+                    protein: Number(prot),
+                    timestamp: Timestamp.now()
+                });
+            } catch (e) { showToast("Save error"); }
+        };
+
+        window.deleteEntry = async (id) => {
+            if (!confirm("Delete this entry?")) return;
+            const path = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'meals', id);
+            await deleteDoc(path);
+        };
+
+        // UI Helpers
+        window.openModal = () => {
+            document.getElementById('modal-overlay').classList.remove('hidden');
+            document.getElementById('modal-overlay').classList.add('flex');
+            document.getElementById('form-view').classList.remove('hidden');
+            document.getElementById('loading-view').classList.add('hidden');
+        };
+
+        window.closeModal = () => {
+            document.getElementById('modal-overlay').classList.add('hidden');
+            document.getElementById('modal-overlay').classList.remove('flex');
+            document.getElementById('meal-name').value = '';
+            document.getElementById('meal-kcal').value = '';
+            document.getElementById('meal-prot').value = '';
+        };
+
+        window.submitManual = () => {
+            const n = document.getElementById('meal-name').value;
+            const k = document.getElementById('meal-kcal').value;
+            const p = document.getElementById('meal-prot').value;
+            if (!n) return showToast("Enter a meal name");
+            window.saveMeal(n, k || 0, p || 0);
+            closeModal();
+        };
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 3000);
+        }
+
+        initAuth();
+    </script>
+</body>
+</html>
