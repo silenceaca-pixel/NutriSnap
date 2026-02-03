@@ -126,14 +126,15 @@
 
         // CONFIGURATION
         // If deploying to GitHub, paste your Firebase config here
-        const MANUAL_FIREBASE_CONFIG = {
-            apiKey: "PASTE_YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
+        const firebaseConfig = {
+  apiKey: "AIzaSyAMWYs6rZ7kVDyKhsZQWCMgkGU_Zckfjxw",
+  authDomain: "nutrisnap-e91f9.firebaseapp.com",
+  projectId: "nutrisnap-e91f9",
+  storageBucket: "nutrisnap-e91f9.firebasestorage.app",
+  messagingSenderId: "524470882633",
+  appId: "1:524470882633:web:0823f92ef9a6c62a774a98",
+  measurementId: "G-25DW9EPTFL"
+};
 
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : MANUAL_FIREBASE_CONFIG;
         const app = initializeApp(firebaseConfig);
