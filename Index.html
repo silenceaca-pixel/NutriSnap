@@ -124,19 +124,16 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // CONFIGURATION
-        // If deploying to GitHub, paste your Firebase config here
-        const firebaseConfig = {
-  apiKey: "AIzaSyAMWYs6rZ7kVDyKhsZQWCMgkGU_Zckfjxw",
-  authDomain: "nutrisnap-e91f9.firebaseapp.com",
-  projectId: "nutrisnap-e91f9",
-  storageBucket: "nutrisnap-e91f9.firebasestorage.app",
-  messagingSenderId: "524470882633",
-  appId: "1:524470882633:web:0823f92ef9a6c62a774a98",
-  measurementId: "G-25DW9EPTFL"
-};
+        const MANUAL_CONFIG = {
+            apiKey: "AIzaSyAMWYs6rZ7kVDyKhsZQWCMgkGU_Zckfjxw",
+            authDomain: "nutrisnap-e91f9.firebaseapp.com",
+            projectId: "nutrisnap-e91f9",
+            storageBucket: "nutrisnap-e91f9.firebasestorage.app",
+            messagingSenderId: "524470882633",
+            appId: "1:524470882633:web:0823f92ef9a6c62a774a98"
+        };
 
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : MANUAL_FIREBASE_CONFIG;
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : MANUAL_CONFIG;
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -149,31 +146,16 @@
         document.getElementById('goal-kcal-display').innerText = dailyGoalKcal;
         document.getElementById('input-goal-kcal').value = dailyGoalKcal;
 
-        // AUTHENTICATION
-        async function startAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (err) {
-                console.error("Auth error:", err);
-                showToast("Connection error. Is Firebase setup?");
-            }
-        }
-
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 currentUser = user;
                 document.getElementById('user-badge').innerText = `ID: ${user.uid.slice(0, 8)}`;
                 syncMeals();
             } else {
-                startAuth();
+                signInAnonymously(auth);
             }
         });
 
-        // DATA SYNC
         function syncMeals() {
             if (!currentUser) return;
             const path = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'meals');
@@ -190,7 +172,6 @@
             const list = document.getElementById('meal-list');
             const kcalEl = document.getElementById('total-kcal');
             const protEl = document.getElementById('total-protein');
-            const summaryCard = document.getElementById('summary-card');
             
             let totalKcal = 0, totalProt = 0;
             
@@ -222,7 +203,6 @@
             lucide.createIcons();
         }
 
-        // AI ANALYSIS (Now supports both direct and proxy)
         window.handleImageAnalysis = async (input) => {
             const file = input.files[0];
             if (!file) return;
@@ -237,37 +217,26 @@
                 const prompt = "Identify food. Estimate calories and protein. Respond strictly in JSON: {\"name\": \"string\", \"calories\": number, \"protein\": number}";
 
                 try {
-                    let response;
-                    // Check if we are in the canvas environment or Vercel
                     const isCanvas = typeof apiKey !== 'undefined' && apiKey !== "";
+                    const url = isCanvas ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}` : '/api/analyze';
                     
-                    if (isCanvas) {
-                        // Direct call for this environment
-                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/png", data: base64 } }] }]
-                            })
-                        });
-                    } else {
-                        // Proxy call for GitHub/Vercel (No regional block)
-                        response = await fetch('/api/analyze', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ image: base64, prompt: prompt })
-                        });
-                    }
-
-                    if (!response.ok) throw new Error("API Failed");
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            image: base64, 
+                            prompt: prompt,
+                            contents: isCanvas ? [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/png", data: base64 } }] }] : undefined
+                        })
+                    });
 
                     const result = await response.json();
                     let data;
                     if (isCanvas) {
-                        const text = result.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim();
-                        data = JSON.parse(text);
+                        const rawText = result.candidates[0].content.parts[0].text;
+                        data = JSON.parse(rawText.replace(/```json|```/g, "").trim());
                     } else {
-                        data = result; // The proxy already parses it for us
+                        data = result;
                     }
 
                     await window.saveMeal(data.name, data.calories, data.protein);
@@ -310,6 +279,7 @@
 
         window.closeModal = () => {
             document.getElementById('modal-overlay').classList.add('hidden');
+            document.getElementById('modal-overlay').classList.remove('flex');
             document.getElementById('form-view').classList.remove('hidden');
             document.getElementById('loading-view').classList.add('hidden');
             document.getElementById('file-input').value = '';
